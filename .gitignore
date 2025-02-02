@@ -1,2 +1,3 @@
 .vscode
 *.drawio.bkp
+**/.DS_Store
