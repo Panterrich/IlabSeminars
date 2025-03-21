@@ -90,12 +90,279 @@ g++ $FLAGS arg_parser.o logger.o test_library.o buffer_clean.o main.o \
 
 Пример написания цели (target) следующий:
 
-```
+```make
 arg_parser.o: ./src/arg_parser.cpp
     g++ $(FLAGS) -c -I./include/ ./src/arg_parser.cpp -o arg_parser.o
 ```
 
+Или в общем случае:
+
+```make
+<target>: [<requisites>]
+    [shell commands]
+```
+
+Таким образом задаётся, что будет собирать данная цель и через двоеточие указываются все зависимости, а затем рецепт: как эту цель собрать.
+
 > [!Warning]
 > В Makefile обязательно используется табуляция.
 
-Любая цель в Makefile считается файлом. Таким образом задаётся, что будет собирать данная цель и через двоеточие указываются все зависимости, а затем рецепт: как эту цель собрать.
+Любая цель в Makefile по-умолчанию считается файлом, и make следит за датой обновления этого файла. Цель будет пересобираться, если изменился хотя бы один реквизит, либо если реквизита вообще нет.
+
+Перепишем наш скрипт на makefile:
+
+```make
+FLAGS = -O2
+
+all: arg_parser.o logger.o test_library.o buffer_clean.o main.o test_solve_quadr.o compare_double.o \
+show_results.o get_data.o solve_quadr.o
+	g++ $(FLAGS) arg_parser.o logger.o test_library.o buffer_clean.o main.o \
+	test_solve_quadr.o compare_double.o show_results.o get_data.o solve_quadr.o -o square
+
+arg_parser.o: ./src/arg_parser.cpp
+	g++ $(FLAGS) -c -I./include/ ./src/arg_parser.cpp -o arg_parser.o
+
+logger.o: ./src/logger.cpp
+	g++ $(FLAGS) -c -I./include/ ./src/logger.cpp -o logger.o
+
+test_library.o: ./src/logger.cpp
+	g++ $(FLAGS) -c -I./include/ ./src/test_library.cpp -o test_library.o
+
+buffer_clean.o: ./src/buffer_clean.cpp
+	g++ $(FLAGS) -c -I./include/ ./src/buffer_clean.cpp -o buffer_clean.o
+
+main.o: ./src/main.cpp
+	g++ $(FLAGS) -c -I./include/ ./src/main.cpp -o main.o
+
+test_solve_quadr.o: ./src/test_solve_quadr.cpp
+	g++ $(FLAGS) -c -I./include/ ./src/test_solve_quadr.cpp -o test_solve_quadr.o
+
+compare_double.o: ./src/compare_double.cpp
+	g++ $(FLAGS) -c -I./include/ ./src/compare_double.cpp -o compare_double.o
+
+show_results.o: ./src/show_results.cpp
+	g++ $(FLAGS) -c -I./include/ ./src/show_results.cpp -o show_results.o
+
+get_data.o: ./src/get_data.cpp
+	g++ $(FLAGS) -c -I./include/ ./src/get_data.cpp -o get_data.o
+
+solve_quadr.o: ./src/solve_quadr.cpp
+	g++ $(FLAGS) -c -I./include/ ./src/solve_quadr.cpp -o solve_quadr.o
+```
+
+Отлично, но у нас теперь в нашей рабочей директории куча объектников. Давайте добавим в makefile следующую цель:
+
+```make
+clean:
+    rm -rf *.o
+```
+
+Как уже говорилось ранее, clean будет считаться за файл, но так как его не существует и он не появляется при выполнении данной команды, то эта цель будет отрабатывать каждый раз.
+
+Давайте перечислим некоторые проблемы данного makefile:
+
+1. Компилятор прибит гвоздями к каждой команде. Хочется иметь возможность быстро подменить компилятор на другой.
+2. Часто дублируется конструкция `-I./include`, можно вынести в переменную.
+3. Если в проекте будет файл с именем `clean`, то таргет `clean` перестанет отрабатывать.
+4. Много однотипных целей.
+
+Исправим недоразумение с `clean`:
+
+```make
+.PHONY: clean
+clean:
+    rm -rf *.o
+```
+
+`PHONY` таргеты это специальные таргеты, которые не соответствуют никаким результирующим файлам. Обычно такими таргеты становятся по типу `all`, `clean`, `install`, `check` и другие. Рекомендуется помечать специальные таргеты так, чтобы случайный файл с таким именем в директории не помешал сборке.
+
+### Переменные в Makefile
+
+Переменные в Makefile занимают важную позицию. Они жестко прибиты в shell.
+Есть некоторый список стандартных переменных предопределенных в make, которые необходимо рассмотреть:
+1. $(CC) и $(CXX) - компиляторы С и C++
+2. $(CFLAGS) и $(CXXFLAGS) - флаги компиляции С и С++
+3. $(CPPFLAGS) - флаги препроцессора С
+4. $(LDFLAGS) - флаги линковщика
+
+Давайте разберемся со следующим примером
+
+```make
+bar = Hello $(baz)
+baz = World
+quux = $(baz)
+qux = Hello $(quux)
+quux = Make
+
+.PHONY: all
+all:
+    @echo "bar = $(bar)"
+    @echo "qux = $(qux)"
+```
+
+> [!Note]
+> По умолчанию make показывает все исполняемые команды, иногда имеет смысл это подавить. Делается это с помощью `@` перед командой.
+
+```
+$ make -f lazy.mk
+bar = Hello World
+qux = Hello Make
+```
+
+Почему так? Переменные в makefile вычисляются лениво. Раскрытие переменных происходит в самый последний момент - в момент использования.
+
+### Энергичные присвоения
+
+А что будет выводиться в этом случае?
+
+```make
+bar := Hello $(baz)
+baz := World
+
+.PHONY: all
+all:
+    @echo "bar := $(bar)"
+```
+
+```
+$ make -f energy.mk
+bar := Hello
+```
+
+Неинициализированная переменная, которая используется в энергичном присвоении, будет пустой строкой.
+
+Чтобы записать, дописать или переписать переменную, заданную снаружи, надо указать override.
+
+```make
+override CFLAGS += -I./include
+
+.PHONY: all
+all:
+    @echo $(CFLAGS)
+```
+
+```
+$ make CFLAGS="-g -O0"
+-g -O0 -I./include
+```
+
+### Параллельность в makefile
+Давайте посмотрим следующий пример:
+
+```make
+SUBDIRS = foo bar baz
+
+.PHONY: subdirs
+subdirs:
+    for dir in $(SUBDIRS); do \
+        $(MAKE) -C $dir; \
+    done
+```
+
+Команда `make -C $dir` запускает рекурсивно makefile в указанной директории. Makefile можно запускать параллельно с помощью флага `-jN`, где `N` - количество воркеров (обычно ставят не больше числа потоков, учитывая количество оперативной памяти). В данном случае параллельность была утеряна, так как make не знает о зависимостях и последовательно запускает рекурсивный make, а также теряется сообщение об ошибках внутри запуска makefile.
+
+Перепишим следующим образом:
+
+```make
+SUBDIRS = foo bar baz
+
+.PHONY: subdirs
+subdirs: $(SUBDIRS)
+
+.PHONY: $(SUBDIRS)
+$(SUBDIRS):
+    @$(MAKE) -C $@
+```
+
+> [!Note]
+> `$@` - автоматическая переменная, которая означает имя цели.
+
+Получаем, что список директорий задаёт несколько псевдоцелей, каждый из которых вызывает соответствующий make, и есть псевдоцель, которая зависит от списка этих псевдоцелей.
+
+Если запустить make c флагом `-k`, то make будет игнорировать ошибки и пытаться собрать всё, что может.
+
+### Автоматические переменные
+
+Мы уже успели познакомиться с автоматической переменной `$@`. Рассмотрим другой пример, который избавит нас от другой упомянутой проблемы:
+
+```make
+arg_parser.o: ./src/arg_parser.cpp
+	g++ $(CFLAGS) -c $^ -o $@
+```
+
+1. `$@` - имя таргета
+2. `$^` - имена всех реквизитов
+3. `$<` - имя первого реквизита
+4. `$(@D)` - часть имени относящаяся к директории
+5. `$(@F)` - часть имени относящаяся к файлу
+
+## Системы сборки: уровень 2, любительский makefile
+
+Объединяем предыдущие результаты и получаем:
+
+```make
+CC = gcc
+CFLAGS ?= -O2
+COMMONOTIC = -I./include
+
+override CFLAGS += $(COMMONOTIC)
+
+.PHONY: all
+all: square
+
+square: arg_parser.o logger.o test_library.o buffer_clean.o main.o test_solve_quadr.o compare_double.o \
+show_results.o get_data.o solve_quadr.o
+    $(CC) $^ -o $@ $(LDFLAGS)
+
+arg_parser.o: ./src/arg_parser.cpp
+	$(CC) $(CFLAGS) -c $^ -o $@
+
+logger.o: ./src/logger.cpp
+	$(CC) $(CFLAGS) -c $^ -o $@
+
+test_library.o: ./src/logger.cpp
+	$(CC) $(CFLAGS) -c $^ -o $@
+
+buffer_clean.o: ./src/buffer_clean.cpp
+	$(CC) $(CFLAGS) -c $^ -o $@
+
+main.o: ./src/main.cpp
+	$(CC) $(CFLAGS) -c $^ -o $@
+
+test_solve_quadr.o: ./src/test_solve_quadr.cpp
+	$(CC) $(CFLAGS) -c $^ -o $@
+
+compare_double.o: ./src/compare_double.cpp
+	$(CC) $(CFLAGS) -c $^ -o $@
+
+show_results.o: ./src/show_results.cpp
+	$(CC) $(CFLAGS) -c $^ -o $@
+
+get_data.o: ./src/get_data.cpp
+	$(CC) $(CFLAGS) -c $^ -o $@
+
+solve_quadr.o: ./src/solve_quadr.cpp
+	$(CC) $(CFLAGS) -c $^ -o $@
+
+.PHONY: clean
+clean:
+    rm -rf *.o
+```
+
+### Функции в makefile
+
+
+## Советы
+
+1. Используйте стандартные переменные для компиляторов, линкеров и т.д.
+2. Используйте также стандартные переменные для флагов.
+3. Помечайте PHONY те таргеты, которые не соответствуют файлам.
+4. Используйте override, если вы предполагаете, что переменная задаётся извне.
+5. Не пишите сложные shell-скрипты внутри makefiles.
+6. Используйте автоматические переменные.
+
+## Самостоятельная работа
+
+1. Напишите самостоятельно универсальный makefile, в котором необходимо менять минимальное количество вещей, при переходе на другой проект.
+2. Попытайтесь написать makefile для нескольких отдельных модулей и написать общий makefile.
+3. Добавьте несколько режимов сборки проектов: Release (`-O2`) и Debug (`-g3 -O0`).
