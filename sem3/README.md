@@ -15,16 +15,16 @@
 
 Есть два типа зависимостей, которые должны быть разрешены на разных стадиях сборки. Первый тип - стрелки из синих в черные блоки, должно быть разрешены на этапе компиляции. Второй тип - стрелки из черных черные блоки, должны быть разрешены на этапе линковки, определение должно слинковаться с использованием имени.
 
-Имена могут быть объявлены, определены и затем использованы в рамках одного файла, но более типичная история, это когда нам необходимо переиспользовать функцию из другого модуля. Тогда мы декларацию функции (прототип) выносим в заголовочный файл. Определение функции кладем в какую-то единицу трансляции (.с), при этом в этом же файле указываем декларацию с помощью подключение заголовочного файла. Затем
+Имена могут быть объявлены, определены и затем использованы в рамках одного файла, но более типичная история, это когда нам необходимо переиспользовать функцию из другого модуля. Тогда мы декларацию функции (прототип) выносим в заголовочный файл. Определение функции кладем в какую-то единицу трансляции (.с), при этом в этом же файле указываем декларацию с помощью подключения заголовочного файла. Затем
 в единице трансляции, где мы вызываем это функцию, также необходимо прокинуть декларацию функции: подключить соответствующий заголовочный файл.
 
 Итак, мы узнали как у нас выглядит привычный принцип передачи имен компилятору для сборки.
 
 ## Project layout
 
-Теперь перейден к типичному устройству репозитория проектов на С/C++. Как уже отмечалось ранее, все программисты стремятся сделать разделение на модули, поэтому любой проект представляет собой древовидную структуру, состоящая из модулей.
+Теперь перейдем к типичному устройству репозитория проектов на С/C++. Как уже отмечалось ранее, все программисты стремятся сделать разделение на модули, поэтому любой проект представляет собой древовидную структуру, состоящую из модулей.
 
-Модуль представляет собой набор исходников (единиц трансляции), которые лежат в директории с типичным названием `src` и набор публичных заголовочных файлов, которые лежат в директории `include`. Если модуль содержит тесты, то их также могут положить в директорию `test`.
+Модуль представляет собой набор исходников (единиц трансляции), которые лежат в директории с типичным названием `src`/`source`, и набор публичных заголовочных файлов, которые лежат в директории `include`. Если модуль содержит тесты, то их также могут положить в директорию `test`.
 
 Если репозиторий не является отдельной библиотекой, т.е. у него существует точка входа (функция main()), то её могут положить как в корень репозитория, так и в папку src корневого модуля.
 
@@ -35,7 +35,7 @@
 
 ## Системы сборки: уровень 0, bash-скрипт
 
-Перейдем к системам сборки. Пусть для простоты у нас есть репозиторий с одним модулем. Нам необходимо собрать исполняемый файл нашей программы. Вы уже умеете компилировать программу с помощью командной строки, но чтобы каждый раз её не прописывать можно записать эту команду в файл и вызывать скрипт каждый раз по необходимости.
+Перейдем к системам сборки. Пусть для простоты у нас есть репозиторий с одним модулем. Нам необходимо собрать исполняемый файл нашей программы. Вы уже умеете компилировать программу с помощью командной строки, но чтобы каждый раз её не прописывать, можно записать эту команду в файл и вызывать скрипт каждый раз по необходимости.
 
 Пример:
 
@@ -52,8 +52,7 @@ src/solve_quadr.cpp -Iinclude/ -std=c++17 -o square
 > [!NOTE]
 > Не забудьте сделать скрипт исполняемым с помощью команды `chmod +x build.sh`
 
-
-Но давайте разобьём эту команду на шаги, которые компилятор сам выполняет в процессе, позже будет понятно зачем.
+Давайте разобьём эту команду на шаги, которые компилятор сам выполняет в процессе. Позже будет понятно зачем.
 
 ```shell
 #!/bin/bash
@@ -80,13 +79,13 @@ g++ $FLAGS arg_parser.o logger.o test_library.o buffer_clean.o main.o \
 
 ## Системы сборки: уровень 1, базовый makefile
 
-Что здесь плохо в написанном выше скрипте? Мы пересобираем каждый раз весь проект. Если проект большой, то его полная пересборка измеряется часами. Часто в процессе разработки меняете только небольшую часть файлов, и соответственно необходимо пересобирать только те файлы, которые вы поменяли, и те файлы, которые зависели от них. Это существенно ускоряет пересборку проекта. Такой принцип называется **раздельной компиляцией**.
+Что плохого в написанном выше скрипте? Мы пересобираем каждый раз весь проект. Если проект большой, то его полная пересборка измеряется часами. Часто в процессе разработки меняется только небольшая часть файлов, и соответственно необходимо пересобирать только те файлы, которые вы поменяли, и те файлы, которые зависели от них. Это существенно ускоряет пересборку проекта. Такой принцип называется **раздельной компиляцией**.
 
-Что ещё нам не нравиться в предыдущем варианте? Язык bash-скриптов не декларативный: постоянно приходится описывать **как** сделать вместо того, чтобы указать **что** нужно сделать. Хочется просто описать зависимости файлов, а не процесс сборки.
+Что ещё нам не нравится в предыдущем варианте? Язык bash-скриптов не декларативный: постоянно приходится описывать **как** сделать вместо того, чтобы указать **что** нужно сделать. Хочется просто описать зависимости файлов, а не процесс сборки.
 
 На основе решений этих проблем был придуман Makefile.
 
-Зависимости проекта, который можно собрать, всегда образуют **ациклический** однонаправленный граф. Это значит, что мы всегда можем описать файлы, те которые уже есть и те которые нужны. Makefile строит это граф, и запускает сборку в этом топологическом порядке, пересобирая только те цели, зависимости которых изменились.
+Зависимости проекта, который можно собрать, всегда образуют **ациклический** однонаправленный граф. Это значит, что мы всегда можем описать файлы, которые уже есть и которые нужны. Makefile строит этот граф, и запускает сборку в этом топологическом порядке, пересобирая только те цели, зависимости которых изменились.
 
 Пример написания цели (target) следующий:
 
@@ -174,11 +173,11 @@ clean:
     rm -rf *.o
 ```
 
-`PHONY` таргеты это специальные таргеты, которые не соответствуют никаким результирующим файлам. Обычно такими таргеты становятся по типу `all`, `clean`, `install`, `check` и другие. Рекомендуется помечать специальные таргеты так, чтобы случайный файл с таким именем в директории не помешал сборке.
+`PHONY` таргеты это специальные таргеты, которые не соответствуют никаким результирующим файлам. Обычно такими таргеты становятся `all`, `clean`, `install`, `check` и другие. Рекомендуется помечать специальные таргеты так, чтобы случайный файл с таким именем в директории не помешал сборке.
 
 ### Переменные в Makefile
 
-Переменные в Makefile занимают важную позицию. Они жестко прибиты в shell.
+Переменные в Makefile занимают важную позицию.
 Есть некоторый список стандартных переменных предопределенных в make, которые необходимо рассмотреть:
 1. $(CC) и $(CXX) - компиляторы С и C++
 2. $(CFLAGS) и $(CXXFLAGS) - флаги компиляции С и С++
@@ -231,18 +230,21 @@ bar := Hello
 
 Неинициализированная переменная, которая используется в энергичном присвоении, будет пустой строкой.
 
+Если переменная не создана внутри Makefile, то make будет искать это же имя в переменных окружения. Переменные окружения -
+это специальные переменные, определенные оболочкой (shell) и используемые программами во время выполнения. Они могут определяться системой и пользователем.
+
 Чтобы записать, дописать или переписать переменную, заданную снаружи, надо указать override.
 
 ```make
-override CFLAGS += -I./include
+override CXXFLAGS += -I./include
 
 .PHONY: all
 all:
-    @echo $(CFLAGS)
+    @echo $(CXXFLAGS)
 ```
 
 ```
-$ make CFLAGS="-g -O0"
+$ make CXXFLAGS="-g -O0"
 -g -O0 -I./include
 ```
 
@@ -277,18 +279,21 @@ $(SUBDIRS):
 > [!Note]
 > `$@` - автоматическая переменная, которая означает имя цели.
 
-Получаем, что список директорий задаёт несколько псевдоцелей, каждый из которых вызывает соответствующий make, и есть псевдоцель, которая зависит от списка этих псевдоцелей.
+Получаем, что список директорий задаёт несколько псевдоцелей, каждая из которых вызывает соответствующий make, и есть псевдоцель, которая зависит от списка этих псевдоцелей.
 
-Если запустить make c флагом `-k`, то make будет игнорировать ошибки и пытаться собрать всё, что может.
+> [!Note]
+>  Если запустить make c флагом `-k`, то make будет игнорировать ошибки и пытаться собрать всё, что может.
 
 ### Автоматические переменные
 
-Мы уже успели познакомиться с автоматической переменной `$@`. Рассмотрим другой пример, который избавит нас от другой упомянутой проблемы:
+Мы уже успели познакомиться с автоматической переменной `$@`. Рассмотрим пример, который избавит нас от другой упомянутой проблемы:
 
 ```make
 arg_parser.o: ./src/arg_parser.cpp
-	g++ $(CFLAGS) -c $^ -o $@
+	g++ $(CXXFLAGS) -c $^ -o $@
 ```
+
+Итого:
 
 1. `$@` - имя таргета
 2. `$^` - имена всех реквизитов
@@ -301,48 +306,48 @@ arg_parser.o: ./src/arg_parser.cpp
 Объединяем предыдущие результаты и получаем:
 
 ```make
-CC = gcc
-CFLAGS ?= -O2
+CXX = g++
+CXXFLAGS ?= -O2
 COMMONOTIC = -I./include
 
-override CFLAGS += $(COMMONOTIC)
+override CXXFLAGS += $(COMMONOTIC)
 
 .PHONY: all
 all: square
 
 square: arg_parser.o logger.o test_library.o buffer_clean.o main.o test_solve_quadr.o compare_double.o \
 show_results.o get_data.o solve_quadr.o
-    $(CC) $^ -o $@ $(LDFLAGS)
+    $(CXX) $^ -o $@ $(LDFLAGS)
 
 arg_parser.o: ./src/arg_parser.cpp
-	$(CC) $(CFLAGS) -c $^ -o $@
+	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
 logger.o: ./src/logger.cpp
-	$(CC) $(CFLAGS) -c $^ -o $@
+	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
 test_library.o: ./src/logger.cpp
-	$(CC) $(CFLAGS) -c $^ -o $@
+	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
 buffer_clean.o: ./src/buffer_clean.cpp
-	$(CC) $(CFLAGS) -c $^ -o $@
+	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
 main.o: ./src/main.cpp
-	$(CC) $(CFLAGS) -c $^ -o $@
+	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
 test_solve_quadr.o: ./src/test_solve_quadr.cpp
-	$(CC) $(CFLAGS) -c $^ -o $@
+	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
 compare_double.o: ./src/compare_double.cpp
-	$(CC) $(CFLAGS) -c $^ -o $@
+	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
 show_results.o: ./src/show_results.cpp
-	$(CC) $(CFLAGS) -c $^ -o $@
+	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
 get_data.o: ./src/get_data.cpp
-	$(CC) $(CFLAGS) -c $^ -o $@
+	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
 solve_quadr.o: ./src/solve_quadr.cpp
-	$(CC) $(CFLAGS) -c $^ -o $@
+	$(CXX) $(CXXFLAGS) -c $^ -o $@
 
 .PHONY: clean
 clean:
@@ -351,6 +356,103 @@ clean:
 
 ### Функции в makefile
 
+Функция вызывается как `$(function [<arguments>])`
+
+```make
+cppfiles = main1.cpp foo.cpp main2.cpp bar.cpp
+mains = main1.cpp main2.cpp
+filtered = $(filter-out $(mains),$(cppfiles))
+```
+
+В переменную filtered попадёт `foo.cpp` и `bar.cpp`.
+
+Из всех функций выделим функцию `patsubst`, её аргументы: pattern, replacement, text.
+
+```
+objs = $(patsubst %.cpp, %.0, $(cppfiles))
+```
+
+Эквивалентно другой конструкции `$(var:pattern=replacement)`
+```
+ofilt = $(filtered:%.cpp=%.o)
+```
+
+Эта конструкция более часто используемая.
+
+## Pattern rules
+
+Напишим общий рецепт для сборки всех объектников
+
+```make
+
+CPPSRC = src/arg_parser.cpp src/logger.cpp src/test_library.cpp src/buffer_clean.cpp \
+    src/main.cpp src/test_solve_quadr.cpp src/compare_double.cpp src/show_results.cpp \
+    src/get_data.cpp src/solve_quadr.cpp
+
+CPPOBJ = $(CPPSRC:%.cpp=%.o)
+
+%.o : %.cpp
+    $(CXX) $(CXXFLAGS) -c $< -o $@
+
+square: $(CPPOBJ)
+    $(CXX) $^ -o $@ $(LDFLAGS)
+
+```
+
+Мы написали pattern rule, но ровно такой же предопределен в makefile, поэтому его можно опустить, так как он является implicit. Но хороший тон это использовать для ваших переменных static pattern rules:
+
+```
+$(CPPOBJ): %.o: %cpp
+     $(CXX) $(CXXFLAGS) -c $< -o $@
+```
+
+Проблема: объектные файлы начнут создавать внутри папок. Временно сделаем по другому:
+
+```make
+
+CPPSRC = src/arg_parser.cpp src/logger.cpp src/test_library.cpp src/buffer_clean.cpp \
+    src/main.cpp src/test_solve_quadr.cpp src/compare_double.cpp src/show_results.cpp \
+    src/get_data.cpp src/solve_quadr.cpp
+
+CPPOBJ = arg_parser.o logger.o test_library.o buffer_clean.o \
+    main.o test_solve_quadr.o compare_double.o show_results.o \
+    get_data.o solve_quadr.o
+
+$(CPPOBJ): %.o : src/%.cpp
+    $(CXX) $(CXXFLAGS) -c $< -o $@
+
+square: $(CPPOBJ)
+    $(CXX) $^ -o $@ $(LDFLAGS)
+
+```
+
+> [!CAUTION]
+> Есть соблазн сделать так
+> ```make
+> CPPSRC = $(wildcard src/*.cpp)
+> ```
+> Само по себе wildcard не плохи, но плохо делать своими таргетами весь мусор, который wildcard найдет в директории `src`.
+> Опыт показывает, что списки файлов лучше прибивать намертво простым перечислением.
+
+## Headers
+
+На этом мы победили makefile, но кажется мы не заметили слона. Makefile ничего не знает о зависимостях по заголовочным файлам. Он не будет пересобирать таргет, даже если она зависит от изменившегося хедера. На помощь приходит сам компилятор:
+
+```shell
+$ g++ -I./include -E src/arg_parser.cpp -MM -MT arg_parser.o
+
+arg_parser.o: src/arg_parser.cpp include/arg_parser.h include/print_colors.h \
+  include/define_consts.h
+```
+
+Отлично пропишим включение файлов зависимостей автоматически при сборке объектного файла при помощи чуть других опций компилятора:
+
+```make
+$(CPPOB): %.o: src/%.cpp
+	$(CXX) $(CXXFLAGS) -MP -MMD -c $< -o $@
+```
+
+Данный способ сильно проще других, которые вы можете найти в интернете.
 
 ## Советы
 
@@ -360,9 +462,32 @@ clean:
 4. Используйте override, если вы предполагаете, что переменная задаётся извне.
 5. Не пишите сложные shell-скрипты внутри makefiles.
 6. Используйте автоматические переменные.
+7. Используйте pattern rule
+
+## Список рекомендованных флагов
+
+### Windows
+
+```
+-Wshadow -Winit-self -Wredundant-decls -Wcast-align -Wundef -Wfloat-equal -Winline -Wunreachable-code -Wmissing-declarations -Wmissing-include-dirs -Wswitch-enum -Wswitch-default -Weffc++ -Wmain -Wextra -Wall -g -pipe -fexceptions -Wcast-qual -Wconversion -Wctor-dtor-privacy -Wempty-body -Wformat-security -Wformat=2 -Wignored-qualifiers -Wlogical-op -Wno-missing-field-initializers -Wnon-virtual-dtor -Woverloaded-virtual -Wpointer-arith -Wsign-promo -Wstack-usage=8192 -Wstrict-aliasing -Wstrict-null-sentinel -Wtype-limits -Wwrite-strings -Werror=vla -D_DEBUG -D_EJUDGE_CLIENT_SIDE
+```
+
+### Linux and MacOs (x86-64)
+
+```
+-D _DEBUG -ggdb3 -std=c++17 -O0 -Wall -Wextra -Weffc++ -Waggressive-loop-optimizations -Wc++14-compat -Wmissing-declarations -Wcast-align -Wcast-qual -Wchar-subscripts -Wconditionally-supported -Wconversion -Wctor-dtor-privacy -Wempty-body -Wfloat-equal -Wformat-nonliteral -Wformat-security -Wformat-signedness -Wformat=2 -Winline -Wlogical-op -Wnon-virtual-dtor -Wopenmp-simd -Woverloaded-virtual -Wpacked -Wpointer-arith -Winit-self -Wredundant-decls -Wshadow -Wsign-conversion -Wsign-promo -Wstrict-null-sentinel -Wstrict-overflow=2 -Wsuggest-attribute=noreturn -Wsuggest-final-methods -Wsuggest-final-types -Wsuggest-override -Wswitch-default -Wswitch-enum -Wsync-nand -Wundef -Wunreachable-code -Wunused -Wuseless-cast -Wvariadic-macros -Wno-literal-suffix -Wno-missing-field-initializers -Wno-narrowing -Wno-old-style-cast -Wno-varargs -Wstack-protector -fcheck-new -fsized-deallocation -fstack-protector -fstrict-overflow -flto-odr-type-merging -fno-omit-frame-pointer -Wlarger-than=8192 -Wstack-usage=8192 -pie -fPIE -Werror=vla -fsanitize=address,alignment,bool,bounds,enum,float-cast-overflow,float-divide-by-zero,integer-divide-by-zero,leak,nonnull-attribute,null,object-size,return,returns-nonnull-attribute,shift,signed-integer-overflow,undefined,unreachable,vla-bound,vptr
+```
+
+### MacOs (ARM)
+
+```
+-Wall -std=c++17 -Wall -Wextra -Weffc++ -Wc++14-compat -Wmissing-declarations -Wcast-align -Wcast-qual -Wchar-subscripts -Wconversion -Wctor-dtor-privacy -Wempty-body -Wfloat-equal -Wformat-nonliteral -Wformat-security -Wformat=2 -Winline -Wnon-virtual-dtor -Woverloaded-virtual -Wpacked -Wpointer-arith -Winit-self -Wredundant-decls -Wshadow -Wsign-conversion -Wsign-promo -Wstrict-overflow=2 -Wsuggest-override -Wswitch-default -Wswitch-enum -Wundef -Wunreachable-code -Wunused -Wvariadic-macros -Wno-literal-range -Wno-missing-field-initializers -Wno-narrowing -Wno-old-style-cast -Wno-varargs -Wstack-protector -Wsuggest-override -Wbounds-attributes-redundant -Wlong-long -Wopenmp -fcheck-new -fsized-deallocation -fstack-protector -fstrict-overflow -fno-omit-frame-pointer -Wlarger-than=8192 -Wstack-protector -fPIE -Werror=vla
+```
 
 ## Самостоятельная работа
 
-1. Напишите самостоятельно универсальный makefile, в котором необходимо менять минимальное количество вещей, при переходе на другой проект.
-2. Попытайтесь написать makefile для нескольких отдельных модулей и написать общий makefile.
-3. Добавьте несколько режимов сборки проектов: Release (`-O2`) и Debug (`-g3 -O0`).
+1. Пройдите самостоятельно по всем шагам, которые были описаны в этом семинаре.
+2. Добавьте в makefile директорию build, которая внутри себя должна повторять древовидную структуру репозитория и собирать там все артефакты сборки.
+3. Напишите самостоятельно универсальный makefile, в котором необходимо менять минимальное количество вещей, при переходе на другой проект.
+4. Попытайтесь написать makefile для нескольких отдельных модулей и написать обобщающий makefile.
+5. Добавьте несколько режимов сборки проектов: Release (`-O2`) и Debug (`-g3 -O0`).
